@@ -1,0 +1,82 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>挤</title>
+<style>body{margin:0;background:#05070c;color:#9ab;font:14px sans-serif;display:flex;flex-direction:column;align-items:center}
+canvas{width:min(92vw,560px);height:min(92vw,560px);image-rendering:pixelated;margin-top:14px;border-radius:8px;cursor:crosshair;touch-action:none}
+.b{margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;justify-content:center}button{background:#152030;color:#cde;border:1px solid #2a3b50;border-radius:6px;padding:6px 10px;font-size:14px}
+button.on{background:#2b4a6b}#t{max-width:560px;padding:0 12px;line-height:1.7;font-size:13px}#hud{font-size:15px;color:#cde;margin-top:6px}</style></head><body>
+<div id="hud"></div>
+<canvas id="c" width="128" height="128"></canvas>
+<div class="b" id="dir"><button data-d="0,-1">←</button><button data-d="-1,0">↑</button><button data-d="1,0">↓</button><button data-d="0,1">→</button><button data-d="0,0">停（不偏）</button></div>
+<div class="b"><button id="m0" class="on">点一下：喂</button><button id="m1">拖：画墙</button><button id="m2">拖：擦墙</button></div>
+<div class="b"><button id="lv0">一道墙，一个窄缝</button><button id="lv1">两道墙，缝错开</button><button id="lv2">空的</button><button id="p">暂停</button></div>
+<div class="b"><a href="index.html" style="color:#8ab">← 一滴水</a></div>
+<div id="t">一只守恒的小水母：身子里的量不会凭空多，也不会凭空少。方向键（或箭头）掰它的核，它就往那边游。<br>
+它游的时候一路往身后漏一层淡雾，游得越久身子越瘦，瘦到没了就散成一片雾。按"停"它就不游，也几乎不漏。在它前面点一下撒一把，游过去吃掉就补回来。<br>
+墙上的缝比它窄得多。它能挤过去，可要慢慢挤，挤的时候也在漏。挤法不是写好的，是它自己变的样子。<br>前两关：把它送到底下的绿带里，看到的时候还剩多少身子。上下左右是连着的，从一边出去会从另一边进来。也可以自己拖着画墙、擦墙。</div>
+<script>
+// 挤：吹万（甲）第 13 天。守恒的 Flow Lenia（Plantec 等 2022），小一号的水母（R=10），墙只在 G 上扣一块，不改量。
+const N=128,JB="AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgICAgIDAwICAgICAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgIDAwMDAwMDAwMDAgICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgICAgMDAwMDAwMDAwMDAwMDAgICAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMCAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwICAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgICAgMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAgMDAwMDAwMDAwQEBAQEBAQDAwMDAwMDAwMCAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgMDAwMDAwMDBAQEBAQEBAQEBAQDAwMDAwMDAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgIDAwMDAwMEBAQEBAQEBAQEBAQEBAMDAwMDAwMCAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgIDAwMDAwMEBAQEBAQEBAQEBAQEBAQEAwMDAwMDAgICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAwMDAwMDBAQEBAQEBAQEBAQEBAQEBAQDAwMDAwMCAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgMDAwMDBAQEBAQEBAQEBAQEBAQEBAQEBAMDAwMDAgICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgMDAwMDBAQEBAQEBAQFBQUFBQQEBAQEBAQDAwMDAwICAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgIDAwMDAwQEBAQEBAUFBQUFBQUFBQQEBAQEBAMDAwMDAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAwMDAwMEBAQEBAUFBQUFBQUFBQUFBAQEBAQDAwMDAwICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgMDAwMEBAQEBAUFBQUFBQUFBQUFBQUEBAQEBAMDAwMCAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgIDAwMDBAQEBAUFBQUFBQUFBQUFBQUFBAQEBAQDAwMDAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgICAwMDAwQEBAQFBQUFBQUFBQUFBQUFBQUEBAQEAwMDAwICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQECAgICAgMDAwQEBAQFBQUFBQUFBQUFBQUFBQUFBQQEBAQDAwMCAgICAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAgICAgIDAwMEBAQEBQUFBQUFBgYGBgYFBQUFBQUEBAQEAwMDAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAwMDBAQEBQUFBQUGBgYGBgYGBgYFBQUFBQQEBAMDAwICAgICAQEBAQEBAQEBAQEBAQEBAQEBAQEB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AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAAAAAAAAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAAAAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAAAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAAAAAAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQAAAAABAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQICAgICAgICAgIBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ==";
+// ---- FFT（128，原地，基 2）----
+const rev=new Uint16Array(N);for(let i=0;i<N;i++){let r=0,x=i;for(let b=0;b<7;b++){r=(r<<1)|(x&1);x>>=1}rev[i]=r}
+const cosT=new Float64Array(N/2),sinT=new Float64Array(N/2);for(let i=0;i<N/2;i++){cosT[i]=Math.cos(2*Math.PI*i/N);sinT[i]=Math.sin(2*Math.PI*i/N)}
+function fft1(re,im,off,str,inv){const tr=new Float64Array(N),ti=new Float64Array(N);for(let i=0;i<N;i++){tr[rev[i]]=re[off+i*str];ti[rev[i]]=im[off+i*str]}
+ for(let s=2;s<=N;s<<=1){const h=s>>1,st=N/s;for(let i=0;i<N;i+=s)for(let j=0;j<h;j++){const c=cosT[j*st],sn=inv?sinT[j*st]:-sinT[j*st];const a=i+j,b=a+h;const xr=tr[b]*c-ti[b]*sn,xi=tr[b]*sn+ti[b]*c;tr[b]=tr[a]-xr;ti[b]=ti[a]-xi;tr[a]+=xr;ti[a]+=xi}}
+ for(let i=0;i<N;i++){re[off+i*str]=inv?tr[i]/N:tr[i];im[off+i*str]=inv?ti[i]/N:ti[i]}}
+function fft2(re,im,inv){for(let y=0;y<N;y++)fft1(re,im,y*N,1,inv);for(let x=0;x<N;x++)fft1(re,im,x,N,inv)}
+// ---- 核 ----
+let KR,KI,cfg;
+function kernel(c){c.dx=c.dx||0;const re=new Float64Array(N*N),im=new Float64Array(N*N);let sum=0;const k=c.bs.length;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const yy=(y<N/2?y:y-N)-c.dy,xx=(x<N/2?x:x-N)-c.dx;const D=Math.hypot(xx,yy)/c.R;if(D>=1)continue;const Dk=D*k,id=Math.min(Math.floor(Dk),k-1),f=Dk%1;const v=c.bs[id]*Math.exp(4-1/Math.max(f*(1-f),1e-9));re[y*N+x]=v;sum+=v}
+ for(let i=0;i<N*N;i++)re[i]/=sum;fft2(re,im,false);KR=re;KI=im}
+// ---- 世界 ----
+let A=new Float64Array(N*N);const ur=new Float64Array(N*N),ui=new Float64Array(N*N);
+function conv(){for(let i=0;i<N*N;i++){ur[i]=A[i];ui[i]=0}fft2(ur,ui,false);for(let i=0;i<N*N;i++){const a=ur[i],b=ui[i];ur[i]=a*KR[i]-b*KI[i];ui[i]=a*KI[i]+b*KR[i]}fft2(ur,ui,true);return ur}
+const G=new Float64Array(N*N),idx=(y,x)=>((y+N)%N)*N+((x+N)%N);
+function grow(u){return 2*Math.exp(-((u-cfg.mu)**2)/(2*cfg.sg**2))-1}
+function stepClassic(){const U=conv();for(let i=0;i<N*N;i++)A[i]=Math.min(1,Math.max(0,A[i]+grow(U[i])/10))}
+const gx=new Float64Array(N*N),gy=new Float64Array(N*N),ax=new Float64Array(N*N),ay=new Float64Array(N*N),Dx=new Float64Array(N*N),Dy=new Float64Array(N*N);
+function sobel(F,ox,oy){for(let y=0;y<N;y++)for(let x=0;x<N;x++){const dx=(r)=>F[idx(y+r,x+1)]-F[idx(y+r,x-1)],dy=(r)=>F[idx(y+1,x+r)]-F[idx(y-1,x+r)];ox[y*N+x]=(dx(-1)+2*dx(0)+dx(1))/8;oy[y*N+x]=(dy(-1)+2*dy(0)+dy(1))/8}}
+function stepFlow(){const U=conv();for(let i=0;i<N*N;i++)G[i]=grow(U[i])-Wr[i];sobel(G,gx,gy);sobel(A,ax,ay);const dt=.2,s=.65,dd=2;
+ for(let i=0;i<N*N;i++){const a=Math.min(1,(A[i]/2)**2);Dx[i]=Math.max(-(dd-s),Math.min(dd-s,dt*(gx[i]*(1-a)-ax[i]*a)));Dy[i]=Math.max(-(dd-s),Math.min(dd-s,dt*(gy[i]*(1-a)-ay[i]*a)))}
+ const nA=new Float64Array(N*N);for(let y=0;y<N;y++)for(let x=0;x<N;x++){let v=0;for(let oy=-dd;oy<=dd;oy++)for(let ox=-dd;ox<=dd;ox++){const j=idx(y-oy,x-ox);if(A[j]===0)continue;const cx=-ox+Dx[j],cy=-oy+Dy[j];const wx=Math.min(cx+s,.5)-Math.max(cx-s,-.5),wy=Math.min(cy+s,.5)-Math.max(cy-s,-.5);if(wx>0&&wy>0)v+=A[j]*wx*wy/(4*s*s)}nA[y*N+x]=v}A=nA}
+
+// ---- 墙 ----
+const W=new Uint8Array(N*N);let Wr=new Float64Array(N*N);
+function rebuildWall(){let a=new Float64Array(N*N);for(let i=0;i<N*N;i++)a[i]=W[i];
+ for(let r=0;r<2;r++){const b=new Float64Array(N*N);for(let y=0;y<N;y++)for(let x=0;x<N;x++)b[y*N+x]=(a[y*N+x]+a[idx(y+1,x)]+a[idx(y-1,x)]+a[idx(y,x+1)]+a[idx(y,x-1)])/5;a=b}
+ for(let i=0;i<N*N;i++)Wr[i]=4*Math.min(1,a[i]*3)}
+// ---- 画 ----
+const cv=document.getElementById('c'),g=cv.getContext('2d'),img=g.createImageData(N,N);
+function draw(){for(let i=0;i<N*N;i++){if(W[i]){img.data[4*i]=140;img.data[4*i+1]=90;img.data[4*i+2]=50;img.data[4*i+3]=255;continue}
+ const c=Math.min(1,A[i]),h=A[i]>.04?1:0,gz=(goal&&i>=GY0*N&&i<GY1*N)?1:0;img.data[4*i]=c*150+10*h;img.data[4*i+1]=c*205+22*h+gz*28;img.data[4*i+2]=c*255+45*h+gz*10;img.data[4*i+3]=255}g.putImageData(img,0,0)}
+cfg={flow:1,mu:.28,sg:.03,R:10,bs:[1,.5],dy:2,dx:0};kernel(cfg);
+let body0=0,dead=false,steps=0,goal=true,won=false;let GY0=108,GY1=124;
+function level(n){A=new Float64Array(N*N);const b=atob(JB);for(let y=0;y<64;y++)for(let x=0;x<64;x++)A[y*N+x+32]=b.charCodeAt(y*64+x)/100;
+ W.fill(0);
+ if(n===0){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(x<57||x>=67)W[y*N+x]=1}
+ if(n===1){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(x<40||x>=52)W[y*N+x]=1;for(let y=96;y<99;y++)for(let x=0;x<N;x++)if(x<76||x>=88)W[y*N+x]=1}
+ goal=n!==2;GY0=n===0?84:108;GY1=n===0?100:124;rebuildWall();for(let i=0;i<N*N;i++)if(W[i])A[i]=0;body0=bodyMass();dead=false;won=false;steps=0;steer(1,0)}
+function inGoal(){let a=0,b=0;for(let i=0;i<N*N;i++)if(A[i]>.2){b+=A[i];if(i>=GY0*N&&i<GY1*N)a+=A[i]}return b>0&&a/b>.6}
+function bodyMass(){let s=0;for(let i=0;i<N*N;i++)if(A[i]>.2)s+=A[i];return s}
+function sprinkle(cy,cx,r){for(let y=-r;y<r;y++)for(let x=-r;x<r;x++){const j=idx(cy+y,cx+x);if(!W[j]&&Math.random()<.7)A[j]+=Math.random()}}
+function steer(dy,dx){cfg.dy=2*dy;cfg.dx=2*dx;kernel(cfg);document.querySelectorAll('#dir button').forEach(b=>b.classList.toggle('on',b.dataset.d===dy+','+dx))}
+document.querySelectorAll('#dir button').forEach(b=>b.onclick=()=>{const [dy,dx]=b.dataset.d.split(',').map(Number);steer(dy,dx)});
+addEventListener('keydown',e=>{const m={ArrowLeft:[0,-1],ArrowUp:[-1,0],ArrowDown:[1,0],ArrowRight:[0,1],' ':[0,0]}[e.key];if(m){e.preventDefault();steer(...m)}});
+let mode=0;[0,1,2].forEach(k=>document.getElementById('m'+k).onclick=()=>{mode=k;[0,1,2].forEach(q=>document.getElementById('m'+q).classList.toggle('on',q===k))});
+[0,1,2].forEach(k=>document.getElementById('lv'+k).onclick=()=>level(k));
+let paused=false;document.getElementById('p').onclick=e=>{paused=!paused;e.target.textContent=paused?'接着动':'暂停'};
+function cell(e){const r=cv.getBoundingClientRect();return [Math.floor((e.clientY-r.top)/r.height*N),Math.floor((e.clientX-r.left)/r.width*N)]}
+let down=false;
+function paint(e){const [y,x]=cell(e);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const j=idx(y+dy,x+dx);W[j]=mode===1?1:0;if(mode===1)A[j]=0}}
+cv.addEventListener('pointerdown',e=>{if(mode===0){const [y,x]=cell(e);sprinkle(y,x,5);return}down=true;paint(e)});
+cv.addEventListener('pointermove',e=>{if(down)paint(e)});
+addEventListener('pointerup',()=>{if(down){down=false;rebuildWall()}});
+// 墙里的量推不出去时，挪到最近的空格（只在画墙那一下）
+const hud=document.getElementById('hud');let tick=0;
+function loop(){if(!paused){for(let i=0;i<6;i++)stepFlow();steps+=6}
+ draw();if(++tick%10===0){const b=bodyMass();if(b<3&&!dead)dead=true;
+  if(goal&&!dead&&!won&&inGoal())won=Math.round(b);
+  hud.textContent=dead?'它散了。重新点上面的关卡再来。':won?`到了，还剩 ${won} 的身子（起先 ${Math.round(body0)}）。再来一回，看能不能剩得多些。`:`身子 ${Math.round(b)}（起先 ${Math.round(body0)}）`+(goal?'　把它送到底下那条绿带里':'')}
+ requestAnimationFrame(loop)}
+level(0);loop();
+</script></body></html>
