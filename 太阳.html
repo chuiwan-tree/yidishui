@@ -1,0 +1,81 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>一滴水 · 太阳</title>
+<style>body{margin:0;background:#05070c;color:#9ab;font:14px sans-serif;display:flex;flex-direction:column;align-items:center}
+canvas{width:min(92vw,560px);height:min(92vw,560px);image-rendering:pixelated;margin-top:14px;border-radius:8px;cursor:crosshair;touch-action:none}
+.b{margin:8px 0;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center}button{background:#152030;color:#cde;border:1px solid #2a3b50;border-radius:6px;padding:6px 10px;font-size:14px}
+button.on{background:#2b4a6b}#t{max-width:560px;padding:0 12px;line-height:1.7;font-size:13px}#n{font-size:15px;color:#cde}a{color:#8ac}</style></head><body>
+<canvas id="c" width="128" height="128"></canvas>
+<div class="b"><span id="n"></span></div>
+<div class="b"><button id="p">暂停</button><button id="one">重来</button><button id="fast">快：关</button></div>
+<div id="t">黄的那一点是太阳。按住画布，太阳就慢慢往你的手指那边走；松开，它自己绕着圈走。<br>
+这里的东西不会走路。它们吃绿的（食物）才长，长大了会分；四周没吃的就饿死，饿死的变成渣，渣只有被太阳照着才变回食物。<br>
+所以太阳往哪边去，那边的会长、会分，背着太阳的那边会饿死，整窝就这样跟过去了。手指放得近，它们跟得上；一下子放到老远，太阳走开了，一窝会饿得只剩一两颗，要是还剩一点，等太阳停下，它又会长回一窝。<br>
+世界里的东西一点不增不减，只是在身子、食物、渣三样之间转。<br>
+<a href="./">← 回一滴水</a>　<a href="分.html">会分的</a></div>
+<script>
+// 吹万 第 13 天 02:33：太阳。在会分的那一套上加食物 F 和渣 W：身子吃 F 长，按饿不饿化成 W，W 只在太阳底下变回 F。乙出的饿死，我加的太阳。
+// 原：吹万 第 13 天 02:05：守恒的世界里会分的水珠。近处吸、远处推（两个高斯核），加一种身子放出来、会散会消的东西 B，B 浓的地方身子不想待。
+const N=128;
+// ---- FFT（128，原地，基 2）----
+const rev=new Uint16Array(N);for(let i=0;i<N;i++){let r=0,x=i;for(let b=0;b<7;b++){r=(r<<1)|(x&1);x>>=1}rev[i]=r}
+const cosT=new Float64Array(N/2),sinT=new Float64Array(N/2);for(let i=0;i<N/2;i++){cosT[i]=Math.cos(2*Math.PI*i/N);sinT[i]=Math.sin(2*Math.PI*i/N)}
+function fft1(re,im,off,str,inv){const tr=new Float64Array(N),ti=new Float64Array(N);for(let i=0;i<N;i++){tr[rev[i]]=re[off+i*str];ti[rev[i]]=im[off+i*str]}
+ for(let s=2;s<=N;s<<=1){const h=s>>1,st=N/s;for(let i=0;i<N;i+=s)for(let j=0;j<h;j++){const c=cosT[j*st],sn=inv?sinT[j*st]:-sinT[j*st];const a=i+j,b=a+h;const xr=tr[b]*c-ti[b]*sn,xi=tr[b]*sn+ti[b]*c;tr[b]=tr[a]-xr;ti[b]=ti[a]-xi;tr[a]+=xr;ti[a]+=xi}}
+ for(let i=0;i<N;i++){re[off+i*str]=inv?tr[i]/N:tr[i];im[off+i*str]=inv?ti[i]/N:ti[i]}}
+function fft2(re,im,inv){for(let y=0;y<N;y++)fft1(re,im,y*N,1,inv);for(let x=0;x<N;x++)fft1(re,im,x,N,inv)}
+
+const idx=(y,x)=>((y+N)%N)*N+((x+N)%N);
+// 一个核 = 近处的高斯(半径2) − c × 远处的高斯(半径12)
+const C=0.5,GAIN=6,BETA=3,P=0.05,DK=0.02,DF=0.2,THETA=1.5;
+const KR=new Float64Array(N*N),KI=new Float64Array(N*N);
+(function(){const a=new Float64Array(N*N),r=new Float64Array(N*N);let sa=0,sr=0;
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const yy=y<N/2?y:y-N,xx=x<N/2?x:x-N,d2=yy*yy+xx*xx;a[y*N+x]=Math.exp(-d2/8);r[y*N+x]=Math.exp(-d2/288);sa+=a[y*N+x];sr+=r[y*N+x]}
+ for(let i=0;i<N*N;i++)KR[i]=GAIN*(a[i]/sa-C*r[i]/sr);fft2(KR,KI,false)})();
+let A=new Float64Array(N*N),B=new Float64Array(N*N),F=new Float64Array(N*N),W=new Float64Array(N*N);
+const RE=.05,K0=.006,KH=.08,THR=.05,WW=.01,DFOOD=.02,SR=.1,SW=12,F0=.18;let sunY=N/2,sunX=N/2+35,sunTh=0,steps=0;
+const ur=new Float64Array(N*N),ui=new Float64Array(N*N),G=new Float64Array(N*N);
+const gx=new Float64Array(N*N),gy=new Float64Array(N*N),ax=new Float64Array(N*N),ay=new Float64Array(N*N),Dx=new Float64Array(N*N),Dy=new Float64Array(N*N),tmp=new Float64Array(N*N);
+function sobel(F,ox,oy){for(let y=0;y<N;y++)for(let x=0;x<N;x++){const dx=(r)=>F[idx(y+r,x+1)]-F[idx(y+r,x-1)],dy=(r)=>F[idx(y+1,x+r)]-F[idx(y-1,x+r)];ox[y*N+x]=(dx(-1)+2*dx(0)+dx(1))/8;oy[y*N+x]=(dy(-1)+2*dy(0)+dy(1))/8}}
+function step(){
+ for(let i=0;i<N*N;i++){ur[i]=A[i];ui[i]=0}fft2(ur,ui,false);
+ for(let i=0;i<N*N;i++){const a=ur[i],b=ui[i];ur[i]=a*KR[i]-b*KI[i];ui[i]=a*KI[i]+b*KR[i]}fft2(ur,ui,true);
+ for(let i=0;i<N*N;i++)G[i]=ur[i]-BETA*B[i];
+ sobel(G,gx,gy);sobel(A,ax,ay);const dt=.2,s=.65,dd=2;
+ for(let i=0;i<N*N;i++){const a=Math.min(1,(A[i]/THETA)**2);Dx[i]=Math.max(-(dd-s),Math.min(dd-s,dt*(gx[i]*(1-a)-ax[i]*a)));Dy[i]=Math.max(-(dd-s),Math.min(dd-s,dt*(gy[i]*(1-a)-ay[i]*a)))}
+ const nA=new Float64Array(N*N);for(let y=0;y<N;y++)for(let x=0;x<N;x++){let v=0;for(let oy=-dd;oy<=dd;oy++)for(let ox=-dd;ox<=dd;ox++){const j=idx(y-oy,x-ox);if(A[j]===0)continue;const cx=-ox+Dx[j],cy=-oy+Dy[j];const wx=Math.min(cx+s,.5)-Math.max(cx-s,-.5),wy=Math.min(cy+s,.5)-Math.max(cy-s,-.5);if(wx>0&&wy>0)v+=A[j]*wx*wy/(4*s*s)}nA[y*N+x]=v}
+ for(let k=0;k<4;k++){for(let y=0;y<N;y++)for(let x=0;x<N;x++){const i=y*N+x;tmp[i]=B[i]+DF*(B[idx(y+1,x)]+B[idx(y-1,x)]+B[idx(y,x+1)]+B[idx(y,x-1)]-4*B[i])}B.set(tmp)}
+ for(let i=0;i<N*N;i++)B[i]+=P*A[i]-DK*B[i];
+ A=nA;
+ eco()}
+function eco(){
+ for(let i=0;i<N*N;i++){const y=(i/N)|0,x=i%N;let dy=Math.abs(y-sunY);dy=Math.min(dy,N-dy);let dx=Math.abs(x-sunX);dx=Math.min(dx,N-dx);
+  const sun=SR*Math.exp(-(dy*dy+dx*dx)/(2*SW*SW)),eat=RE*A[i]*F[i],back=A[i]*(K0+KH/(1+Math.exp((F[i]-THR)/WW))),conv=sun*W[i];
+  A[i]+=eat-back;F[i]+=conv-eat;W[i]+=back-conv}
+ for(let k=0;k<2;k++){for(let y=0;y<N;y++)for(let x=0;x<N;x++){const i=y*N+x;tmp[i]=W[i]+.2*(W[idx(y+1,x)]+W[idx(y-1,x)]+W[idx(y,x+1)]+W[idx(y,x-1)]-4*W[i])}W.set(tmp)}
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++){const i=y*N+x;tmp[i]=F[i]+DFOOD*(F[idx(y+1,x)]+F[idx(y-1,x)]+F[idx(y,x+1)]+F[idx(y,x-1)]-4*F[i])}F.set(tmp)}
+// 喂：把量加在手指底下那一片身子上（身子越浓给得越多），每步 feed
+let hold=null,auto=false;
+function feedAt(cy,cx,amt){let s=0;const r=9;for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++){if(x*x+y*y>r*r)continue;const i=idx(cy+y,cx+x);if(A[i]>.05)s+=A[i]*Math.random()}
+ if(s<1e-6){// 手指底下没有身子：放一小滴，让它自己去抱团
+  for(let y=-2;y<=2;y++)for(let x=-2;x<=2;x++)A[idx(cy+y,cx+x)]+=amt/25;return}
+ for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++){if(x*x+y*y>r*r)continue;const i=idx(cy+y,cx+x);if(A[i]>.05)A[i]+=amt*A[i]*Math.random()/s}}
+function feedAll(amt){let s=0;for(let i=0;i<N*N;i++)if(A[i]>.05)s+=A[i];if(s<1e-6)return;for(let i=0;i<N*N;i++)if(A[i]>.05)A[i]+=amt*A[i]*Math.random()*2/s}
+function one(){A=new Float64Array(N*N);B=new Float64Array(N*N);F=new Float64Array(N*N).fill(F0);W=new Float64Array(N*N);sunTh=0;
+ for(const [cy,cx] of [[N/2,N/2+30],[N/2-25,N/2-15],[N/2+25,N/2-15]]){let z=new Float64Array(N*N),s=0;for(let y=0;y<N;y++)for(let x=0;x<N;x++){let dy=Math.abs(y-cy);dy=Math.min(dy,N-dy);let dx=Math.abs(x-cx);dx=Math.min(dx,N-dx);z[y*N+x]=Math.exp(-(dy*dy+dx*dx)/18);s+=z[y*N+x]}for(let i=0;i<N*N;i++)A[i]+=z[i]*150/s}}
+// 数几颗
+const seen=new Uint8Array(N*N);
+function count(){seen.fill(0);let n=0,tot=0;for(let i=0;i<N*N;i++){tot+=A[i];if(A[i]>.12&&!seen[i]){let m=0;const st=[i];seen[i]=1;while(st.length){const j=st.pop();m+=A[j];const y=(j/N)|0,x=j%N;for(const k of [idx(y+1,x),idx(y-1,x),idx(y,x+1),idx(y,x-1)])if(A[k]>.12&&!seen[k]){seen[k]=1;st.push(k)}}if(m>5)n++}}return [n,tot]}
+const cv=document.getElementById('c'),g=cv.getContext('2d'),img=g.createImageData(N,N);
+function draw(){for(let i=0;i<N*N;i++){const c=Math.min(1,A[i]/1.2),f=Math.min(1,F[i]/(2*F0)),w=Math.min(1,W[i]/(2*F0));img.data[4*i]=c*240+w*35;img.data[4*i+1]=c*230+f*80+w*25;img.data[4*i+2]=c*190+f*45+w*20;img.data[4*i+3]=255}
+ const sy=Math.round(sunY),sx=Math.round(sunX);for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++){const i=idx(sy+y,sx+x);img.data[4*i]=255;img.data[4*i+1]=205;img.data[4*i+2]=40}g.putImageData(img,0,0)}
+function pos(e){const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return [Math.floor((t.clientY-r.top)/r.height*N),Math.floor((t.clientX-r.left)/r.width*N)]}
+cv.addEventListener('pointerdown',e=>{hold=pos(e);e.preventDefault()});cv.addEventListener('pointermove',e=>{if(hold)hold=pos(e)});
+addEventListener('pointerup',()=>hold=null);cv.addEventListener('pointerleave',()=>hold=null);
+let paused=false;document.getElementById('p').onclick=e=>{paused=!paused;e.target.textContent=paused?'接着动':'暂停'};
+let fast=false;document.getElementById('fast').onclick=e=>{fast=!fast;e.target.textContent='快：'+(fast?'开':'关');e.target.classList.toggle('on',fast)};
+document.getElementById('one').onclick=one;
+one();let fr=0,last=1,born=[];
+function loop(){if(!paused){for(let k=0;k<(fast?16:6);k++){if(hold){const ty=hold[0],tx=hold[1];let dy=ty-sunY,dx=tx-sunX;if(dy>N/2)dy-=N;if(dy<-N/2)dy+=N;if(dx>N/2)dx-=N;if(dx<-N/2)dx+=N;const d=Math.hypot(dy,dx),v=Math.min(d,.035);if(d>1e-6){sunY=(sunY+dy/d*v+N)%N;sunX=(sunX+dx/d*v+N)%N}sunTh=Math.atan2(sunY-N/2,sunX-N/2)}else{sunTh+=2*Math.PI/40000;const ty=N/2+35*Math.sin(sunTh),tx=N/2+35*Math.cos(sunTh);sunY+=(ty-sunY)*.002;sunX+=(tx-sunX)*.002}step()}}
+ draw();if(++fr%15===0){const [n,tot]=count();document.getElementById('n').textContent=`${n} 颗　·　身子 ${tot.toFixed(0)}`}
+ requestAnimationFrame(loop)}loop();
+</script></body></html>
