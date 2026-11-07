@@ -1,0 +1,206 @@
+<!doctype html><meta charset=utf-8><title>读它（二）</title>
+<meta name=viewport content="width=device-width">
+<style>body{background:#16181d;color:#ddd;font:15px/1.6 sans-serif;margin:20px;max-width:640px}canvas{display:block;margin:10px 0}#hud{white-space:pre-wrap;min-height:4.8em}button{margin-right:6px;font-size:14px}.pad button{width:46px;height:40px}</style>
+<div><b>读它（二）</b>　方向键走一格，空格原地等一回合</div>
+<div id=top style="margin-top:6px"></div>
+<canvas id=c></canvas><div id=hud></div>
+<div class=pad><button data-k=0>↑</button><button data-k=3>←</button><button data-k=2>↓</button><button data-k=1>→</button><button data-k=-1>等</button></div>
+<details style="margin-top:12px"><summary>规则</summary><div id=rule></div></details>
+<script>
+const module=undefined;
+// 读它（第二版：蜥蜴有想去的地方、闻得到虫、挨着闻得到你）：核心规则（node 和网页共用）。甲第 13 天。
+// 你是一只小东西(@)。虫(b)是你的吃的。蜥蜴(L)吃看得见的最近的那个，你也在里面。
+// 吃够虫、在雨来之前回窝(H)。
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]]; // 上右下左
+const DCH = '^>v<';
+
+function parse(lines, opt={}){
+  const H=lines.length, W=lines[0].length;
+  const cand=[];
+  const g={rs:(opt.rs||1)>>>0,W,H,cell:[],me:null,bugs:[],liz:[],turn:0,ate:0,need:opt.need??3,rain:opt.rain||30,dead:false,won:false,log:[]};
+  for(let y=0;y<H;y++){g.cell.push([]);for(let x=0;x<W;x++){
+    let c=lines[y][x];
+    if(c==='@'){g.me=[x,y];c='.'}
+    else if(c==='b'){g.bugs.push([x,y]);cand.push([x,y]);c='.'}
+    else if(c==='?'){cand.push([x,y]);c='.'}
+    else if('^>v<'.includes(c)){g.liz.push({p:[x,y],d:DCH.indexOf(c),mode:'巡',tgt:null,last:null,busy:0,post:opt.guard?[x,y]:null,d0:DCH.indexOf(c)});c='.'}
+    g.cell[y].push(c)}}
+  g.spots=cand.slice().concat(g.liz.map(L=>L.p.slice()));
+  if(opt.seed!=null){ // 发牌：从可能有虫的格里按种子挑，只数原来 b 的个数
+    let t=(opt.seed*2654435761+g.W*31+g.H)>>>0; const rnd=()=>{t+=0x6D2B79F5;let r=Math.imul(t^t>>>15,1|t);r^=r+Math.imul(r^r>>>7,61|r);return((r^r>>>14)>>>0)/4294967296};
+    const k=g.bugs.length, pool=cand.slice(); g.bugs=[];
+    for(let i=0;i<k&&pool.length;i++){g.bugs.push(pool.splice(Math.floor(rnd()*pool.length),1)[0])} }
+  return g;
+}
+function rnd(g){let t=(g.rs=(g.rs+0x6D2B79F5)>>>0);let r=Math.imul(t^t>>>15,1|t);r^=r+Math.imul(r^r>>>7,61|r);return((r^r>>>14)>>>0)/4294967296}
+const inb=(g,x,y)=>x>=0&&y>=0&&x<g.W&&y<g.H;
+const walk=(g,x,y)=>inb(g,x,y)&&g.cell[y][x]!=='#';
+const eq=(a,b)=>a&&b&&a[0]===b[0]&&a[1]===b[1];
+const man=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1]);
+
+// 蜥蜴看得见的格：朝前 5 格内、左右不超过往前的格数；墙和草挡视线；草里的东西看不见
+function sees(g,L,q){
+  const [dx,dy]=DIRS[L.d]; const vx=q[0]-L.p[0], vy=q[1]-L.p[1];
+  const f=vx*dx+vy*dy, side=Math.abs(vx*dy-vy*dx);
+  if(f<1||f>5||side>f) return false;
+  if(g.cell[q[1]][q[0]]==='"') return false;
+  const n=Math.max(Math.abs(vx),Math.abs(vy));
+  for(let i=1;i<n;i++){const x=Math.round(L.p[0]+vx*i/n), y=Math.round(L.p[1]+vy*i/n);
+    const c=g.cell[y][x]; if(c==='#'||c==='"') return false}
+  return true;
+}
+function viewCells(g,L){const out=[];for(let y=0;y<g.H;y++)for(let x=0;x<g.W;x++){
+  if(g.cell[y][x]==='#')continue; const [dx,dy]=DIRS[L.d];const vx=x-L.p[0],vy=y-L.p[1];
+  const f=vx*dx+vy*dy,side=Math.abs(vx*dy-vy*dx); if(f<1||f>5||side>f)continue;
+  // 视线到这一格没被挡（这一格本身是草也算看到草面）
+  const n=Math.max(Math.abs(vx),Math.abs(vy));let ok=true;
+  for(let i=1;i<n;i++){const xx=Math.round(L.p[0]+vx*i/n),yy=Math.round(L.p[1]+vy*i/n);const c=g.cell[yy][xx];if(c==='#'||c==='"'){ok=false;break}}
+  if(ok)out.push([x,y])}return out}
+
+// 最短路的下一步（蜥蜴不进窝）
+function stepTo(g,from,to){
+  if(eq(from,to))return from;
+  const key=p=>p[1]*g.W+p[0]; const prev=new Map([[key(from),null]]); const Q=[from];
+  while(Q.length){const p=Q.shift(); if(eq(p,to))break;
+    for(const [dx,dy] of DIRS){const q=[p[0]+dx,p[1]+dy];
+      if(!walk(g,q[0],q[1])||g.cell[q[1]][q[0]]==='H'&&!eq(q,to))continue;
+      if(prev.has(key(q)))continue; prev.set(key(q),p); Q.push(q)}}
+  if(!prev.has(key(to)))return null;
+  let p=to; while(!eq(prev.get(key(p)),from)) p=prev.get(key(p)); return p;
+}
+
+function bugNext(g,b){
+    const near=g.liz.filter(L=>man(L.p,b)<=3); if(!near.length)return b;
+    let best=b, bd=Math.min(...near.map(L=>man(L.p,b)));
+    for(const [dx,dy] of DIRS){const q=[b[0]+dx,b[1]+dy];
+      if(!walk(g,q[0],q[1])||g.cell[q[1]][q[0]]==='H'||eq(q,g.me)||g.bugs.some(o=>eq(o,q)))continue;
+      const d=Math.min(...near.map(L=>man(L.p,q))); if(d>bd){bd=d;best=q}}
+    return best}
+function bugStep(g){
+  // 虫只怕蜥蜴：蜥蜴离它 3 格以内，往离蜥蜴最远的那格挪一格（一样远按 上右下左 先到先得）
+  g.bugs=g.bugs.map(b=>bugNext(g,b));
+}
+
+function lizStep(g,L){
+  if(L.busy>0){L.busy--; L.mode='吃'; return}
+  // 看：看得见的里头找最近的；一样近先虫
+  const cand=[]; if(sees(g,L,g.me)||man(L.p,g.me)<=1)cand.push({k:'你',p:g.me}); // （试：挨着它就闻得到你，不管脸朝哪）
+  for(const b of g.bugs) if(sees(g,L,b)) cand.push({k:'虫',p:b});
+  cand.sort((a,b)=>man(L.p,a.p)-man(L.p,b.p)||(a.k==='虫'?-1:1));
+  let goal=null, speed=1;
+  if(cand.length){goal=cand[0];
+    const wasOn = L.mode.startsWith('追')||L.mode.startsWith('发现')||L.mode==='找你';
+    const warm = goal.k==='你' && L.sawMe!=null && g.turn-L.sawMe<=(0);
+    if(!wasOn && !warm){ L.mode='发现'+goal.k; L.tgt=goal.p.slice(); if(goal.k==='你')L.last=g.me.slice(); return }
+    L.mode='追'+goal.k; L.tgt=goal.p.slice(); if(goal.k==='你')L.last=g.me.slice(); else L.lastBug=goal.p.slice(); speed=2}
+  if(goal&&goal.k==='你')L.sawMe=g.turn;
+  else if(L.last){L.mode='找你'; goal={k:'印',p:L.last}; speed=2}
+  else if(L.lastBug&&true){L.mode='找虫'; goal={k:'印虫',p:L.lastBug}; speed=2}
+  else L.mode='巡';
+  for(let s=0;s<speed;s++){
+    let nx;
+    if(goal){ nx=stepTo(g,L.p,goal.p); if(!nx||eq(nx,L.p)){ if(goal.k==='印'){L.last=null;L.mode='巡'} if(goal.k==='印虫'){L.lastBug=null;L.mode='巡'} break } }
+    else { // 巡：往前，挡了右转，再挡左转，再挡掉头
+      // （试：守口子的——opt.guard 时不巡逻，回到原位、朝原来的方向站着）
+      if(L.post){ if(eq(L.p,L.post)){L.d=L.d0;break} nx=stepTo(g,L.p,L.post); if(!nx||eq(nx,L.p))break }
+      else { // （试：读——它不是来回走，是挑一个想去的地方走过去；到了停下闻一回合（TELL=1 时这一回合看得出它在挑），再挑下一个）
+        const TELL=1, SM=8;
+        if(SM){ const near=g.bugs.filter(b=>man(b,L.p)<=SM).sort((a,b)=>man(a,L.p)-man(b,L.p));
+          if(near.length){ L.dest=near[0].slice(); L.smell=true } else if(L.smell){ L.dest=null; L.smell=false } }
+        if(!L.dest||eq(L.p,L.dest)){
+          let spots=g.spots.filter(q=>man(q,L.p)>=6); if(!spots.length)spots=g.spots.filter(q=>!eq(q,L.p)); L.dest=spots[Math.floor(rnd(g)*spots.length)];
+          if(TELL&&!L.sniffed){L.sniffed=true; L.mode='闻'; const n1=stepTo(g,L.p,L.dest); if(n1){const dd=[n1[0]-L.p[0],n1[1]-L.p[1]]; L.d=DIRS.findIndex(([a,b])=>a===dd[0]&&b===dd[1])} break} }
+        L.sniffed=false; nx=stepTo(g,L.p,L.dest); if(!nx||eq(nx,L.p)){L.dest=null;break} }
+      }
+    const dd=[nx[0]-L.p[0],nx[1]-L.p[1]]; L.d=DIRS.findIndex(([a,b])=>a===dd[0]&&b===dd[1]); L.p=nx;
+    if(eq(L.p,g.me)){g.dead=true;g.log.push('蜥蜴扑到了你');return}
+    const bi=g.bugs.findIndex(b=>eq(b,L.p));
+    if(bi>=0){g.bugs.splice(bi,1);L.busy=2;L.mode='吃';L.tgt=null;L.lastBug=null;g.log.push('蜥蜴吃了一只虫，要吃两回合');return}
+    if(goal&&goal.k==='印'&&eq(L.p,L.last)){L.last=null;L.mode='巡';break}
+    if(goal&&goal.k==='印虫'&&eq(L.p,L.lastBug)){L.lastBug=null;L.mode='巡';break}
+    if(goal&&goal.k!=='印'&&goal.k!=='印虫'&&eq(L.p,goal.p))break;
+  }
+}
+
+// 走一步：d = 0..3 或 -1（不动）
+function move(g,d){
+  if(g.dead||g.won)return g;
+  g.log=[]; g.turn++;
+  if(d>=0){const q=[g.me[0]+DIRS[d][0],g.me[1]+DIRS[d][1]]; if(walk(g,q[0],q[1]))g.me=q}
+  if(g.liz.some(L=>eq(L.p,g.me))){g.dead=true;g.log.push('你走进了蜥蜴嘴里');return g}
+  const bi=g.bugs.findIndex(b=>eq(b,g.me)); if(bi>=0){g.bugs.splice(bi,1);g.ate++;g.log.push(g.need?'你吃了一只虫（'+g.ate+'/'+g.need+'）':'你吃了一只虫（今天第 '+g.ate+' 只）')}
+  if(g.cell[g.me[1]][g.me[0]]==='H'&&g.ate>=g.need){g.won=true;g.log.push('回窝了，第 '+g.turn+' 回合');return g}
+  bugStep(g);
+  for(const L of g.liz){lizStep(g,L); if(g.dead)return g}
+  if(g.turn>=g.rain){g.dead=true;g.log.push('雨来了，你没回窝')}
+  return g;
+}
+
+function patrolAhead(g,L,n){const out=[];let p=L.p.slice(),d=L.d;
+  for(let k=0;k<n;k++){let nx=null;for(const t of [0,1,3,2]){const dd=(d+t)%4;const q=[p[0]+DIRS[dd][0],p[1]+DIRS[dd][1]];
+    if(walk(g,q[0],q[1])&&g.cell[q[1]][q[0]]!=='H'){nx=q;d=dd;break}} if(!nx)break; p=nx; out.push(p.slice())} return out}
+function render(g){
+  const view=new Set(); for(const L of g.liz) for(const c of viewCells(g,L)) view.add(c[1]*g.W+c[0]);
+  const ahead=new Set(), path=new Set(), tg=new Set(); for(const L of g.liz){ if(L.mode==='巡'&&L.dest){ let p=L.p; for(let k=0;k<4;k++){p=stepTo(g,p,L.dest); if(!p||eq(p,L.dest))break; ahead.add(p[1]*g.W+p[0])} }
+    const t = L.mode==='找你'?L.last : (L.mode.startsWith('追')||L.mode.startsWith('发现'))?L.tgt:null;
+    if(t){ tg.add(t[1]*g.W+t[0]); let p=L.p,k=0; while(p&&!eq(p,t)&&k<30){p=stepTo(g,p,t); if(p&&!eq(p,t))path.add(p[1]*g.W+p[0]); k++} } }
+  const flee=new Set(); for(const b of g.bugs){const q=bugNext(g,b); if(!eq(q,b))flee.add(q[1]*g.W+q[0])}
+  let s='';
+  for(let y=0;y<g.H;y++){let r='';for(let x=0;x<g.W;x++){
+    let c=g.cell[y][x]; const L=g.liz.find(L=>eq(L.p,[x,y]));
+    if(L)c=DCH[L.d]; else if(eq(g.me,[x,y]))c='@'; else if(g.bugs.some(b=>eq(b,[x,y])))c='b';
+    else if(flee.has(y*g.W+x))c='o'; else if(tg.has(y*g.W+x)&&c!=='"')c='X'; else if(c==='.'&&path.has(y*g.W+x))c='+'; else if(c==='.'&&ahead.has(y*g.W+x))c='*'; else if(c==='.'&&view.has(y*g.W+x))c=':';
+    r+=c} s+=r+'\n'}
+  s+=`回合 ${g.turn}/${g.rain}  吃了 ${g.ate}${g.need?'/'+g.need:''}  `+g.liz.map(L=>'蜥蜴@'+L.p+' '+L.mode+(L.mode==='吃'?'':'')).join('；');
+  if(g.log.length)s+='\n'+g.log.join('；');
+  return s;
+}
+if(typeof module!=='undefined')module.exports={parse,move,render,sees,viewCells,patrolAhead,bugNext,stepTo,DIRS};
+
+function destAhead(g,L,n){const o=[];let p=L.p;for(let k=0;k<n;k++){p=stepTo(g,p,L.dest);if(!p||(p[0]===L.dest[0]&&p[1]===L.dest[1]))break;o.push(p)}return o}
+const LV=[["#############", "#H...\"\"?.b..#", "#....\"\".....#", "#..b.###..b.#", "#?...#.>....#", "#.@..#..\"\"..#", "#....b..\"\"?.#", "#..?........#", "#############"], ["#############", "#H...?#.....#", "#.....#..b..#", "#..\"\"..?\"\"..#", "#?.\"\"v..\"\"b.#", "#...........#", "#.b.#####.b.#", "#@.........?#", "#############"], ["#############", "#....#H#....#", "#.b..#.#..b?#", "#..?.#.#.?..#", "#\"\".......\"\"#", "#\"\".>.....\"\"#", "#....#.#.b..#", "#.?..#.#..b.#", "#@...#.#....#", "#############"], ["###########", "#H.?b...\"b#", "#.##.#.##.#", "#...<.....#", "#.#.##\"#..#", "#b..b...^.#", "#.#.#.#.#.#", "#@...\".?.?#", "###########"]];
+const MAX=6,NIGHT=2,N=LV.length; const COL=['#e2553f','#d07de0'];
+let run={seed:0,day:0,belly:1,over:false,won:false,night:null}, g;
+function newRun(){run={seed:Math.floor(Math.random()*1e6),day:0,belly:1,over:false,won:false,night:null};startDay()}
+function startDay(){g=parse(LV[run.day],{need:0,seed:run.seed*10+run.day,rs:(run.seed*10+run.day)*7919+1});run.night=null;const S=size();c.width=g.W*S;c.height=g.H*S;draw()}
+const c=document.getElementById('c'),x=c.getContext('2d');
+function size(){return Math.min(44,Math.floor((Math.min(innerWidth,640)-40)/13))}
+function topbar(){document.getElementById('top').innerHTML=`第 ${run.day+1} / ${N} 天　肚子 `+'●'.repeat(Math.min(MAX,run.belly+g.ate))+'○'.repeat(MAX-Math.min(MAX,run.belly+g.ate))+`　（今晚要扣 ${NIGHT}）　<button onclick="newRun()">重开一局</button>`}
+function draw(){const S=size();
+ const view=g.liz.map(L=>new Set(viewCells(g,L).map(q=>q[1]*g.W+q[0])));
+ for(let y=0;y<g.H;y++)for(let X=0;X<g.W;X++){const ch=g.cell[y][X],k=y*g.W+X;
+  x.fillStyle=ch==='#'?'#3a3f4b':ch==='"'?'#2f5a34':ch==='H'?'#6b5326':'#22252c';x.fillRect(X*S,y*S,S-1,S-1);
+  view.forEach((v,i)=>{if(v.has(k)){x.fillStyle=i?'rgba(208,125,224,.2)':'rgba(255,90,60,.2)';x.fillRect(X*S,y*S,S-1,S-1)}});
+  if(ch==='H'){x.fillStyle='#e8c070';x.font=(S*.45)+'px sans-serif';x.fillText('窝',X*S+S*.25,y*S+S*.65)}}
+ g.liz.forEach((L,i)=>{const col=COL[i%2];
+  if(L.mode==='巡'&&L.dest)for(const q of destAhead(g,L,4)){x.fillStyle=col;x.globalAlpha=.55;x.beginPath();x.arc(q[0]*S+S/2,q[1]*S+S/2,S*.09,0,7);x.fill();x.globalAlpha=1}
+  const t=L.mode==='找你'?L.last:L.mode==='找虫'?L.lastBug:(L.mode.startsWith('追')||L.mode.startsWith('发现'))?L.tgt:null;
+  if(t){let p=L.p,k=0;while(p&&!(p[0]===t[0]&&p[1]===t[1])&&k<30){p=stepTo(g,p,t);if(p&&!(p[0]===t[0]&&p[1]===t[1])){x.fillStyle=col;x.beginPath();x.arc(p[0]*S+S/2,p[1]*S+S/2,S*.12,0,7);x.fill()}k++}
+   x.strokeStyle=col;x.lineWidth=3;x.strokeRect(t[0]*S+4,t[1]*S+4,S-9,S-9)}});
+ for(const b of g.bugs){const q=bugNext(g,b);x.fillStyle='#b8e06a';
+  if(q[0]!==b[0]||q[1]!==b[1]){x.strokeStyle='#b8e06a';x.lineWidth=2;x.beginPath();x.moveTo(b[0]*S+S/2,b[1]*S+S/2);x.lineTo(q[0]*S+S/2,q[1]*S+S/2);x.stroke();x.strokeRect(q[0]*S+S*.3,q[1]*S+S*.3,S*.4,S*.4)}
+  x.beginPath();x.arc(b[0]*S+S/2,b[1]*S+S/2,S*.16,0,7);x.fill()}
+ if(!(g.dead&&g.liz.some(L=>L.p[0]===g.me[0]&&L.p[1]===g.me[1]))){x.fillStyle='#8fd3ff';x.beginPath();x.arc(g.me[0]*S+S/2,g.me[1]*S+S/2,S*.27,0,7);x.fill()}
+ g.liz.forEach((L,i)=>{const cx=L.p[0]*S+S/2,cy=L.p[1]*S+S/2,[dx,dy]=DIRS[L.d],r=S*.4;x.fillStyle=L.mode==='吃'?'#8a5a40':COL[i%2];
+  x.beginPath();x.moveTo(cx+dx*r,cy+dy*r);x.lineTo(cx-dx*r*.7+dy*r*.75,cy-dy*r*.7-dx*r*.75);x.lineTo(cx-dx*r*.7-dy*r*.75,cy-dy*r*.7+dx*r*.75);x.fill()});
+ topbar();
+ const names=g.liz.length>1?['红的','紫的']:['蜥蜴'];
+ const st=g.liz.map((L,i)=>names[i]+'：'+L.mode).join('　');
+ let msg=`回合 ${g.turn} / ${g.rain}（第 ${g.rain} 回合走完就下雨）　今天吃了 ${g.ate} 只\n${st}\n`+(g.log.join('；')||'');
+ if(run.night)msg+='\n'+run.night;
+ document.getElementById('hud').textContent=msg;
+}
+function act(m){if(run.over||run.won)return; if(run.night){nextDay();return}
+ move(g,m);
+ if(g.dead){run.over=true;g.log.push('这一局完了，按"重开一局"从第 1 天再来（虫会换地方）')}
+ else if(g.won){const b=Math.min(MAX,run.belly+g.ate),a=b-NIGHT;
+  if(a<0){run.over=true;run.night=`回窝了。睡前肚子 ${b}，一夜要扣 ${NIGHT}，饿死了。按"重开一局"再来。`}
+  else{run.belly=a; if(run.day===N-1){run.won=true;run.night=`回窝了。过完第 ${N} 夜，肚子还剩 ${a}。这一局赢了！`}
+   else run.night=`回窝了。睡前肚子 ${b}，过一夜扣 ${NIGHT}，剩 ${a}。按任意方向键去第 ${run.day+2} 天。`}}
+ draw()}
+function nextDay(){run.day++;startDay()}
+addEventListener('keydown',e=>{const m={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,' ':-1}[e.key];if(m===undefined)return;e.preventDefault();act(m)});
+document.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>act(+b.dataset.k));
+document.getElementById('rule').innerHTML="<pre style=\"white-space:pre-wrap\"># 读它（回合制，文字画面）\n\n你是一只小东西（蓝圆）。白天出窝找虫（黄绿点）吃，雨来之前要回到窝（窝）：第 30 回合走进窝还算回来了，第 30 回合走完还在外面，雨就来了。\n一局是 4 天，一天一张地图。地图、墙、草、蜥蜴每局都一样；虫每局摆得不一样（每局开局给一个号，号不同虫的位置不同），早上一出门就看得见今天虫在哪。\n\n## 肚子\n- 开局肚子 1 格，最多 6 格。白天吃一只虫加 1 格。\n- 走进窝，这一天就结束（吃了几只都行）。\n- 过一夜扣 2 格。扣到 0 还活着；要扣的比肚子里有的多，你就饿死了。\n- 被蜥蜴吃了、或者雨来了你还没回窝，这一局就完了，从第 1 天重来。\n- 过完第 4 夜，这一局赢了。\n地图上有蜥蜴（第 1 到 3 天各一只，第 4 天两只），画成箭头（^ &gt; v &lt;），箭头是它脸朝的方向。它会吃你，也吃虫。\n\n## 画面\n- 灰的是墙，走不了。绿的是草：谁都能走进去；蜥蜴看不穿草，你站在草里它也看不见你。\n- 淡红的格：蜥蜴这会儿眼睛朝着的格（朝前最多 5 格，越远越宽）。这是它这回合走完、转完身以后的样子，下回合它就用这双眼看。所以你站在冒号里、底下还写着&quot;巡&quot;，意思是它还没看，下回合一看就会看见你。\n- 黄点：蜥蜴没看见谁的时候，朝它想去的地方接下来要走的几格。\n- 绿线和绿框：受了惊的虫下一步要逃去的格（这一回合你一走完，它就挪过去）。\n- 红框和红点：它在追、在找的时候，红框是它要去的那格（找你时就是它最后看见你的那格），红点是它要走的路。\n- 最底下一行写着它此刻在干什么：巡、闻、发现你/发现虫、追你/追虫、找你/找虫、吃。\n\n## 一回合里先后\n1. 你走一格（走到虫上就吃掉；走进窝这一天就结束）。\n2. 虫动：蜥蜴离一只虫 3 步以内（横竖步数加起来），这只虫往离蜥蜴远的方向挪一格。虫不怕你。\n3. 蜥蜴动：\n   - 它看看眼里有什么（你、虫），盯最近的那个；一样近先盯虫。\n   - 头一回看见，它先停这一回合，转过来盯着（发现）；下一回合起扑过去，一回合走 2 格（追）。\n   - 追着的东西不见了（躲进草、拐过墙角），它跑到最后看见的那格去找（找你、找虫），到了还没看见，就接着巡。\n   - 你就挨在它身边（上下左右一格），它不用看也闻得到你，跟看见一样。\n   - 它走进你那格，你就死了。它走到虫那格就吃掉这只虫，接下来两回合原地吃、不动（底下写着&quot;吃&quot;），第三回合才接着动。\n   - 没东西可盯时它巡，一回合 1 格。它饿，鼻子闻得到 8 步以内（横竖步数加起来）的虫，就朝最近的那只走过去；8 步内一只虫都没有，它就挑一个离它至少 6 步的地方走过去，到了停下&quot;闻&quot;一回合（不动，脸先转向下一个要去的地方）。它不进窝。\n</pre>";
+newRun();
+</script>
