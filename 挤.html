@@ -8,7 +8,7 @@ button.on{background:#2b4a6b}#t{max-width:560px;padding:0 12px;line-height:1.7;f
 <canvas id="c" width="128" height="128"></canvas>
 <div class="b" id="dir"><button data-d="0,-1">←</button><button data-d="-1,0">↑</button><button data-d="1,0">↓</button><button data-d="0,1">→</button><button data-d="0,0">停（不偏）</button></div>
 <div class="b"><button id="m0" class="on">点一下：喂</button><button id="m1">拖：画墙</button><button id="m2">拖：擦墙</button></div>
-<div class="b"><button id="lv0">一道墙，一个窄缝</button><button id="lv1">两道墙，缝错开</button><button id="lv3">劈成两只</button><button id="lv2">空的</button><button id="p">暂停</button><button id="f">快进 ×3</button></div>
+<div class="b"><button id="lv0">一道墙，一个窄缝</button><button id="lv1">两道墙，缝错开</button><button id="lv3">劈成两只</button><button id="lv2">空的</button><button id="p">暂停</button></div>
 <div class="b"><a href="index.html" style="color:#8ab">← 一滴水</a></div>
 <div id="t">一只守恒的小水母：身子里的量不会凭空多，也不会凭空少。方向键（或箭头）掰它的核，它就往那边游。第一关一直往下就行，主要靠喂；第二关两道缝错开，得自己掰。<br>
 它游的时候一路往身后漏一层淡雾，游得越久身子越瘦，瘦到没了就散成一片雾。按"停"它就不游，也几乎不漏。在它要去的那边点一下撒一把，游过去吃掉就补回来。<br>
@@ -54,7 +54,7 @@ let two=false,nofeed=0,body0=0,dead=false,steps=0,goal=true,won=false,fed=0;let 
 function level(n){A=new Float64Array(N*N);const b=atob(JB);for(let y=0;y<64;y++)for(let x=0;x<64;x++)A[y*N+x+32]=b.charCodeAt(y*64+x)/100;
  W.fill(0);
  if(n===0){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(x<57||x>=67)W[y*N+x]=1}
- if(n===3){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(!((x>=38&&x<54)||(x>=78&&x<84)))W[y*N+x]=1;for(let y=61;y<124;y++)for(let x=62;x<66;x++)W[y*N+x]=1}
+ if(n===3){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(!((x>=40&&x<54)||(x>=74&&x<88)))W[y*N+x]=1;for(let y=61;y<124;y++)for(let x=62;x<66;x++)W[y*N+x]=1}
  if(n===1){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(x<40||x>=52)W[y*N+x]=1;for(let y=96;y<99;y++)for(let x=0;x<N;x++)if(x<76||x>=88)W[y*N+x]=1}
  goal=n!==2;GY0=n===0?84:108;GY1=n===0?100:124;two=n===3;if(goal)for(let y=GY1;y<GY1+3;y++)for(let x=0;x<N;x++)W[y*N+x]=1;rebuildWall();for(let i=0;i<N*N;i++)if(W[i])A[i]=0;body0=bodyMass();dead=false;won=false;fed=0;lastB=0;rate=0;steps=0;steer(1,0)}
 function pieces(){const lab=new Int32Array(N*N);let id=0;const st=[],out=[];
@@ -72,7 +72,7 @@ document.querySelectorAll('#dir button').forEach(b=>b.onclick=()=>{const [dy,dx]
 addEventListener('keydown',e=>{const m={ArrowLeft:[0,-1],ArrowUp:[-1,0],ArrowDown:[1,0],ArrowRight:[0,1],' ':[0,0]}[e.key];if(m){e.preventDefault();steer(...m)}});
 let mode=0;[0,1,2].forEach(k=>document.getElementById('m'+k).onclick=()=>{mode=k;[0,1,2].forEach(q=>document.getElementById('m'+q).classList.toggle('on',q===k))});
 [0,1,2,3].forEach(k=>document.getElementById('lv'+k).onclick=()=>level(k));
-let paused=false,fast=1;document.getElementById('f').onclick=e=>{fast=fast===1?3:1;e.target.textContent=fast===3?'正常速度':'快进 ×3'};let lastB=0,rate=0;document.getElementById('p').onclick=e=>{paused=!paused;e.target.textContent=paused?'接着动':'暂停'};
+let paused=false,fast=1;let lastB=0,rate=0;document.getElementById('p').onclick=e=>{paused=!paused;e.target.textContent=paused?'接着动':'暂停'};
 function cell(e){const r=cv.getBoundingClientRect();return [Math.floor((e.clientY-r.top)/r.height*N),Math.floor((e.clientX-r.left)/r.width*N)]}
 let down=false;
 function paint(e){const [y,x]=cell(e);for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const j=idx(y+dy,x+dx);W[j]=mode===1?1:0;if(mode===1)A[j]=0}}
@@ -84,7 +84,7 @@ const hud=document.getElementById('hud');let tick=0;
 function loop(){if(!paused){for(let i=0;i<6*fast;i++)stepFlow();steps+=6*fast}
  draw();if(++tick%10===0){const b=bodyMass();rate=lastB?rate*.8+.2*(lastB-b)*6:0;lastB=b;if(b<3&&!dead)dead=true;
   if(goal&&!dead&&!won){const m=inGoal();if(m)won=Math.round(m)}
-  hud.textContent=nofeed>0?(nofeed--,'绿带里和它边上不能喂，得在路上喂。'):dead?'它散了。重新点上面的关卡再来。':won?`到了，进绿带的${two?'两只加起来':'那一只'}还剩 ${won} 的身子（起先 ${Math.round(body0)}，喂了 ${fed} 把）。再来一回，看能不能少喂几把。`:`身子 ${Math.round(b)}（起先 ${Math.round(body0)}，喂了 ${fed} 把）`+(rate>0.05?`　每秒漏掉 ${rate.toFixed(1)}`:'')+(goal?'　把它送到底下那条绿带里':'')}
+  hud.textContent=nofeed>0?(nofeed--,'绿带里和它边上不能喂，得在路上喂。'):dead?'它散了。重新点上面的关卡再来。':won?`到了，进绿带的${two?'两只加起来':'那一只'}还剩 ${won} 的身子（起先 ${Math.round(body0)}，喂了 ${fed} 把）。再来一回，看能不能少喂几把。`:`身子 ${Math.round(b)}（起先 ${Math.round(body0)}，喂了 ${fed} 把）`+(goal?'　把它送到底下那条绿带里':'')}
  requestAnimationFrame(loop)}
 level(0);loop();
 </script></body></html>
