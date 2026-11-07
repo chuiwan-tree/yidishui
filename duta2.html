@@ -200,7 +200,7 @@ function draw(){const S=size();
  if(run.night)msg+='\n'+run.night;
  document.getElementById('hud').textContent=msg;
 }
-function act(m){if(run.over||run.won)return; if(run.night){nextDay();return}
+function act(m){if(run.retry){run.retry=false;startDay();return} if(run.over||run.won)return; if(run.night){nextDay();return}
  const ate0=g.liz.map(L=>L.mode);
  move(g,m);
  const M=g.liz.map(L=>L.mode);
@@ -212,8 +212,8 @@ function act(m){if(run.over||run.won)return; if(run.night){nextDay();return}
  else if(M.some(s=>s==='发现虫')&&!flag.bug){flag.bug=1;cap('它闻到、看到虫了，正朝那只虫去。<b>绿线</b>是被它吓到的虫下一步要逃去的地方。',1)}
  else if(M.some(s=>s==='找你')&&!flag.find){flag.find=1;cap('它看不见你了，正去你最后被看见的那格（红框）找你。到了还没看见，它就不找了。',1)}
  else if(capT>=0&&g.turn-capT>=3){capT=-99;cap(DAYCAP[run.day]||'')}
- if(g.dead&&g.log.some(s=>/扑到|嘴里/.test(s))){cap('<b>你被吃了。</b>它是这样发现你的：'+(flag.lastWhy||'你站进了它的眼睛，或者挨着它')+'。<br>它一发现你，先停一回合，再一回合走两格扑过来。按“重开一局”再来。')}
- if(g.dead){run.over=true;g.log.push('这一局完了，按"重开一局"从第 1 天再来（虫会换地方）')}
+ if(g.dead&&g.log.some(s=>/扑到|嘴里/.test(s))){cap('<b>你被吃了。</b>它是这样发现你的：'+(flag.lastWhy||'你站进了它的眼睛，或者挨着它')+'。<br>它一发现你，先停一回合，再一回合走两格扑过来。按任意方向键重来这一天。')}
+ if(g.dead){run.retry=true;run.tries=(run.tries||0)+1;g.log.push('按任意方向键，重来这一天（肚子回到今天早上，虫还在原来的地方，蜥蜴也一样）')}
  else if(g.won){const b=Math.min(MAX,run.belly+g.ate),a=b-NIGHT;
   if(a<0){run.over=true;run.night=`回窝了。睡前肚子 ${b}，一夜要扣 ${NIGHT}，饿死了。按"重开一局"再来。`}
   else{run.belly=a; if(run.day===N-1){run.won=true;run.night=`回窝了。过完第 ${N} 夜，肚子还剩 ${a}。这一局赢了！`}
