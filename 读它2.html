@@ -90,7 +90,8 @@ function lizStep(g,L){
   cand.sort((a,b)=>man(L.p,a.p)-man(L.p,b.p)||(a.k==='虫'?-1:1));
   let goal=null, speed=1;
   if(cand.length){goal=cand[0];
-    const wasOn = L.mode.startsWith('追')||L.mode.startsWith('发现')||L.mode==='找你';
+    // （试：换了盯的东西也要先停一回合——原来盯着虫、一转眼扑向你，玩的人看不懂）
+    const wasOn = L.mode==='追'+goal.k||L.mode==='发现'+goal.k||(goal.k==='你'&&L.mode==='找你')||(goal.k==='虫'&&L.mode==='找虫');
     const warm = goal.k==='你' && L.sawMe!=null && g.turn-L.sawMe<=(0);
     if(!wasOn && !warm){ L.mode='发现'+goal.k; L.tgt=goal.p.slice(); if(goal.k==='你')L.last=g.me.slice(); return }
     L.mode='追'+goal.k; L.tgt=goal.p.slice(); if(goal.k==='你')L.last=g.me.slice(); else L.lastBug=goal.p.slice(); speed=2}
