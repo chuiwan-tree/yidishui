@@ -5,7 +5,7 @@
 <div id=top style="margin-top:6px"></div>
 <div id=cap style="background:#2a2e38;padding:8px 10px;border-radius:6px;min-height:3.2em;margin-top:8px"></div>
 <canvas id=c></canvas><div id=hud></div>
-<div class=pad><button data-k=0>↑</button><button data-k=3>←</button><button data-k=2>↓</button><button data-k=1>→</button><button data-k=-1>等</button></div>
+<div class=pad><button data-k=0>↑</button><button data-k=3>←</button><button data-k=2>↓</button><button data-k=1>→</button><button data-k=-1>等</button><button id=home style="width:auto">往窝走（回车）</button></div>
 <details style="margin-top:12px"><summary>规则</summary><div id=rule></div></details>
 <script>
 const module=undefined;
@@ -226,7 +226,28 @@ function act(m){if(run.retry){run.retry=false;startDay();return} if(run.over||ru
  draw()}
 function nextDay(){run.day++;startDay()}
 addEventListener('keydown',e=>{const m={ArrowUp:0,ArrowRight:1,ArrowDown:2,ArrowLeft:3,' ':-1}[e.key];if(m===undefined)return;e.preventDefault();act(m)});
-document.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>act(+b.dataset.k));
+document.querySelectorAll('.pad button[data-k]').forEach(b=>b.onclick=()=>act(+b.dataset.k));
+// 往窝走：照最短路一格格替你走，规则照跑；有危险就停，交还给你
+let homing=null;
+function homeDir(){let H=null;for(let y=0;y<g.H;y++)for(let X=0;X<g.W;X++)if(g.cell[y][X]==='H')H=[X,y];if(!H)return null;
+ const key=p=>p[1]*g.W+p[0],prev=new Map([[key(g.me),null]]),Q=[g.me];
+ while(Q.length){const p=Q.shift();if(p[0]===H[0]&&p[1]===H[1])break;
+  for(const [dx,dy] of DIRS){const q=[p[0]+dx,p[1]+dy];if(!walk(g,q[0],q[1])||prev.has(key(q))||g.liz.some(L=>L.p[0]===q[0]&&L.p[1]===q[1]))continue;prev.set(key(q),p);Q.push(q)}}
+ if(!prev.has(key(H)))return null;let p=H;while(prev.get(key(p))&&!(prev.get(key(p))[0]===g.me[0]&&prev.get(key(p))[1]===g.me[1]))p=prev.get(key(p));
+ return {d:DIRS.findIndex(([dx,dy])=>g.me[0]+dx===p[0]&&g.me[1]+dy===p[1]),q:p}}
+function homeWhy(q){for(const L of g.liz){const dm=Math.abs(L.p[0]-q[0])+Math.abs(L.p[1]-q[1]);
+  if(/你/.test(L.mode))return '有蜥蜴在找你、追你';
+  if(sees(g,L,q))return '下一格在蜥蜴眼里';
+  if(dm<=4)return '蜥蜴离得近了（4 格以内）'}return null}
+function homeStep(){homing=null;if(!g||g.dead||g.won||run.night||run.retry||run.over||run.won)return;
+ if(g.need&&g.ate<g.need){cap('今天要先吃够 '+g.need+' 只虫才能回窝（现在 '+g.ate+' 只）。',1);return}
+ if(Math.min(MAX,run.belly+g.ate)-NIGHT<0){cap('现在回窝，今晚肚子不够扣，会饿死。先去吃虫。',1);return}
+ const h=homeDir();if(!h||h.d<0){cap('找不到回窝的路。',1);return}
+ const why=homeWhy(h.q);if(why){cap('<b>停下了：</b>'+why+'。接下来你自己走。',1);return}
+ act(h.d);if(!g.dead&&!g.won&&!run.night)homing=setTimeout(homeStep,140)}
+function homeGo(){if(homing){clearTimeout(homing);homing=null;return}homeStep()}
+document.getElementById('home').onclick=homeGo;
+addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();homeGo()}else if(homing&&e.key.startsWith('Arrow')){clearTimeout(homing);homing=null}},true);
 document.getElementById('rule').innerHTML="<pre style=\"white-space:pre-wrap\"># 读它（回合制，文字画面）\n\n你是一只小东西（蓝圆）。白天出窝找虫（黄绿点）吃，雨来之前要回到窝（窝）：第 30 回合走进窝还算回来了，第 30 回合走完还在外面，雨就来了。\n一局是 4 天，一天一张地图。地图、墙、草、蜥蜴每局都一样；虫每局摆得不一样（每局开局给一个号，号不同虫的位置不同），早上一出门就看得见今天虫在哪。\n\n## 肚子\n- 开局肚子 1 格，最多 6 格。白天吃一只虫加 1 格。\n- 走进窝，这一天就结束（吃了几只都行）。\n- 过一夜扣 2 格。扣到 0 还活着；要扣的比肚子里有的多，你就饿死了。\n- 被蜥蜴吃了、或者雨来了你还没回窝，这一局就完了，从第 1 天重来。\n- 过完第 4 夜，这一局赢了。\n地图上有蜥蜴（第 1 到 3 天各一只，第 4 天两只），画成箭头（^ &gt; v &lt;），箭头是它脸朝的方向。它会吃你，也吃虫。\n\n## 画面\n- 灰的是墙，走不了。绿的是草：谁都能走进去；蜥蜴看不穿草，你站在草里它也看不见你。\n- 淡红的格：蜥蜴这会儿眼睛朝着的格（朝前最多 5 格，越远越宽）。这是它这回合走完、转完身以后的样子，下回合它就用这双眼看。所以你站在冒号里、底下还写着&quot;巡&quot;，意思是它还没看，下回合一看就会看见你。\n- 黄点：蜥蜴没看见谁的时候，朝它想去的地方接下来要走的几格。\n- 绿线和绿框：受了惊的虫下一步要逃去的格（这一回合你一走完，它就挪过去）。\n- 红框和红点：它在追、在找的时候，红框是它要去的那格（找你时就是它最后看见你的那格），红点是它要走的路。\n- 最底下一行写着它此刻在干什么：巡、闻、发现你/发现虫、追你/追虫、找你/找虫、吃。\n\n## 一回合里先后\n1. 你走一格（走到虫上就吃掉；走进窝这一天就结束）。\n2. 虫动：蜥蜴离一只虫 3 步以内（横竖步数加起来），这只虫往离蜥蜴远的方向挪一格。虫不怕你。\n3. 蜥蜴动：\n   - 它看看眼里有什么（你、虫），盯最近的那个；一样近先盯虫。\n   - 头一回看见，它先停这一回合，转过来盯着（发现）；下一回合起扑过去，一回合走 2 格（追）。\n   - 追着的东西不见了（躲进草、拐过墙角），它跑到最后看见的那格去找（找你、找虫），到了还没看见，就接着巡。\n   - 你就挨在它身边（上下左右一格），它不用看也闻得到你，跟看见一样。\n   - 它走进你那格，你就死了。它走到虫那格就吃掉这只虫，接下来两回合原地吃、不动（底下写着&quot;吃&quot;），第三回合才接着动。\n   - 没东西可盯时它巡，一回合 1 格。它饿，鼻子闻得到 8 步以内（横竖步数加起来）的虫，就朝最近的那只走过去；8 步内一只虫都没有，它就挑一个离它至少 6 步的地方走过去，到了停下&quot;闻&quot;一回合（不动，脸先转向下一个要去的地方）。它不进窝。\n</pre>";
 newRun();
 </script>
