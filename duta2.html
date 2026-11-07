@@ -3,6 +3,7 @@
 <style>body{background:#16181d;color:#ddd;font:15px/1.6 sans-serif;margin:20px;max-width:640px}canvas{display:block;margin:10px 0}#hud{white-space:pre-wrap;min-height:4.8em}button{margin-right:6px;font-size:14px}.pad button{width:46px;height:40px}</style>
 <div><b>读它（二）</b>　方向键走一格，空格原地等一回合</div>
 <div id=top style="margin-top:6px"></div>
+<div id=cap style="background:#2a2e38;padding:8px 10px;border-radius:6px;min-height:3.2em;margin-top:8px"></div>
 <canvas id=c></canvas><div id=hud></div>
 <div class=pad><button data-k=0>↑</button><button data-k=3>←</button><button data-k=2>↓</button><button data-k=1>→</button><button data-k=-1>等</button></div>
 <details style="margin-top:12px"><summary>规则</summary><div id=rule></div></details>
@@ -158,11 +159,16 @@ function render(g){
 if(typeof module!=='undefined')module.exports={parse,move,render,sees,viewCells,patrolAhead,bugNext,stepTo,DIRS};
 
 function destAhead(g,L,n){const o=[];let p=L.p;for(let k=0;k<n;k++){p=stepTo(g,p,L.dest);if(!p||(p[0]===L.dest[0]&&p[1]===L.dest[1]))break;o.push(p)}return o}
-const LV=[["#############", "#H...\"\"?.b..#", "#....\"\".....#", "#..b.###..b.#", "#?...#.>....#", "#.@..#..\"\"..#", "#....b..\"\"?.#", "#..?........#", "#############"], ["#############", "#H...?#.....#", "#.....#..b..#", "#..\"\"..?\"\"..#", "#?.\"\"v..\"\"b.#", "#...........#", "#.b.#####.b.#", "#@.........?#", "#############"], ["#############", "#....#H#....#", "#.b..#.#..b?#", "#..?.#.#.?..#", "#\"\".......\"\"#", "#\"\".>.....\"\"#", "#....#.#.b..#", "#.?..#.#..b.#", "#@...#.#....#", "#############"], ["###########", "#H.?b...\"b#", "#.##.#.##.#", "#...<.....#", "#.#.##\"#..#", "#b..b...^.#", "#.#.#.#.#.#", "#@...\".?.?#", "###########"]];
-const MAX=6,NIGHT=2,N=LV.length; const COL=['#e2553f','#d07de0'];
+const LV=[["#########", "#H......#", "#...b...#", "#.....b.#", "#@......#", "#########"], ["#############", "#H...\"\"?.b..#", "#....\"\".....#", "#..b.###..b.#", "#?...#.>....#", "#.@..#..\"\"..#", "#....b..\"\"?.#", "#..?........#", "#############"], ["#############", "#H...?#.....#", "#.....#..b..#", "#..\"\"..?\"\"..#", "#?.\"\"v..\"\"b.#", "#...........#", "#.b.#####.b.#", "#@.........?#", "#############"], ["#############", "#....#H#....#", "#.b..#.#..b?#", "#..?.#.#.?..#", "#\"\".......\"\"#", "#\"\".>.....\"\"#", "#....#.#.b..#", "#.?..#.#..b.#", "#@...#.#....#", "#############"], ["###########", "#H.?b...\"b#", "#.##.#.##.#", "#...<.....#", "#.#.##\"#..#", "#b..b...^.#", "#.#.#.#.#.#", "#@...\".?.?#", "###########"]];
+const MAX=6,NIGHT=2,N=LV.length;
+const DAYCAP=['你是<b style="color:#8fd3ff">蓝色</b>这只小东西，住在<b style="color:#e8c070">窝</b>里。<b style="color:#b8e06a">黄绿点</b>是虫，走上去就吃掉。<br>今天吃够两只再回窝。以后每天吃几只你自己定：上面的肚子每晚要扣两格，扣到不够就饿死。第 30 回合会下雨，雨来前没进窝就死了。<br>用方向键（或下面的按钮）走一格。',
+ '今天有一只<b style="color:#e2553f">蜥蜴</b>（红三角，尖的那头是它的脸）。它吃虫，也吃你。<br><span style="background:rgba(255,90,60,.35)">淡红的格</span>是它的眼睛：你站在里面，它下一回合就看见你。<br><b style="color:#2f9a44">绿的</b>是草，躲在草里它看不见你。',
+ '','','',''];
+let flag={};
+let capT=-99;function cap(h,ev){document.getElementById('cap').innerHTML=h;if(ev)capT=g?g.turn:0} const COL=['#e2553f','#d07de0'];
 let run={seed:0,day:0,belly:1,over:false,won:false,night:null}, g;
-function newRun(){run={seed:Math.floor(Math.random()*1e6),day:0,belly:1,over:false,won:false,night:null};startDay()}
-function startDay(){g=parse(LV[run.day],{need:0,seed:run.seed*10+run.day,rs:(run.seed*10+run.day)*7919+1});run.night=null;const S=size();c.width=g.W*S;c.height=g.H*S;draw()}
+function newRun(){flag={};run={seed:Math.floor(Math.random()*1e6),day:0,belly:1,over:false,won:false,night:null};startDay()}
+function startDay(){g=parse(LV[run.day],{need:run.day===0?2:0,seed:run.seed*10+run.day,rs:(run.seed*10+run.day)*7919+1});run.night=null;cap(DAYCAP[run.day]||'');const S=size();c.width=g.W*S;c.height=g.H*S;draw()}
 const c=document.getElementById('c'),x=c.getContext('2d');
 function size(){return Math.min(44,Math.floor((Math.min(innerWidth,640)-40)/13))}
 function topbar(){document.getElementById('top').innerHTML=`第 ${run.day+1} / ${N} 天　肚子 `+'●'.repeat(Math.min(MAX,run.belly+g.ate))+'○'.repeat(MAX-Math.min(MAX,run.belly+g.ate))+`　（今晚要扣 ${NIGHT}）　<button onclick="newRun()">重开一局</button>`}
@@ -183,15 +189,30 @@ function draw(){const S=size();
  if(!(g.dead&&g.liz.some(L=>L.p[0]===g.me[0]&&L.p[1]===g.me[1]))){x.fillStyle='#8fd3ff';x.beginPath();x.arc(g.me[0]*S+S/2,g.me[1]*S+S/2,S*.27,0,7);x.fill()}
  g.liz.forEach((L,i)=>{const cx=L.p[0]*S+S/2,cy=L.p[1]*S+S/2,[dx,dy]=DIRS[L.d],r=S*.4;x.fillStyle=L.mode==='吃'?'#8a5a40':COL[i%2];
   x.beginPath();x.moveTo(cx+dx*r,cy+dy*r);x.lineTo(cx-dx*r*.7+dy*r*.75,cy-dy*r*.7-dx*r*.75);x.lineTo(cx-dx*r*.7-dy*r*.75,cy-dy*r*.7+dx*r*.75);x.fill()});
+ const SYM={'闻':'?','发现你':'!','发现虫':'!','追你':'!!','追虫':'!!','找你':'?','找虫':'?','吃':'…'};
+ g.liz.forEach((L,i)=>{const s=SYM[L.mode];if(!s)return;x.font='bold '+(S*.5)+'px sans-serif';x.fillStyle='#fff';x.fillText(s,L.p[0]*S+S*.62,L.p[1]*S+S*.38)});
+ if(!g.dead&&g.liz.some(L=>L.busy===0&&(sees(g,L,g.me)||Math.abs(L.p[0]-g.me[0])+Math.abs(L.p[1]-g.me[1])<=1))){x.strokeStyle='#ff5a3c';x.lineWidth=3;x.beginPath();x.arc(g.me[0]*S+S/2,g.me[1]*S+S/2,S*.42,0,7);x.stroke();flag.inEye=1}
  topbar();
+ const ringNote=(!g.dead&&g.liz.some(L=>L.busy===0&&(sees(g,L,g.me)||Math.abs(L.p[0]-g.me[0])+Math.abs(L.p[1]-g.me[1])<=1)))?'\n你身上有红圈：你在它眼里或者挨着它，下一回合它就会发现你。':'';
  const names=g.liz.length>1?['红的','紫的']:['蜥蜴'];
  const st=g.liz.map((L,i)=>names[i]+'：'+L.mode).join('　');
- let msg=`回合 ${g.turn} / ${g.rain}（第 ${g.rain} 回合走完就下雨）　今天吃了 ${g.ate} 只\n${st}\n`+(g.log.join('；')||'');
+ let msg=`回合 ${g.turn} / ${g.rain}（第 ${g.rain} 回合走完就下雨）　今天吃了 ${g.ate} 只\n${st}\n`+(g.log.join('；')||'')+ringNote;
  if(run.night)msg+='\n'+run.night;
  document.getElementById('hud').textContent=msg;
 }
 function act(m){if(run.over||run.won)return; if(run.night){nextDay();return}
+ const ate0=g.liz.map(L=>L.mode);
  move(g,m);
+ const M=g.liz.map(L=>L.mode);
+ g.liz.forEach((L,i)=>{if(/你/.test(L.mode)&&!/你/.test(ate0[i])){const near=Math.abs(L.p[0]-g.me[0])+Math.abs(L.p[1]-g.me[1])<=1;
+   const why=near&&!sees(g,L,g.me)?'你挨着它，它不用看也闻到你了':'你站进了它眼睛（淡红格）里，它看见你了';g.log.push(why);flag.lastWhy=why;
+   if(!flag.nose&&near&&!sees(g,L,g.me)){flag.nose=1;flag.seen=1;cap('<b>它闻到你了！</b>你就挨在它身边（上下左右一格），它不看也知道你在。<br>下一回合它扑过来，一回合走两格。离它远点，或者躲进草里。',1)}}});
+ if(M.some(s=>s==='发现你')&&!flag.seen){flag.seen=1;cap('<b>它看见你了！</b>头上的 <b>!</b> 是它发现你。它先停这一回合，下一回合扑过来，一回合走两格。<br>快躲进草里，或者拐到墙后面去。它会跑到你最后被看见的那格（红框）去找。',1)}
+ else if(M.some(s=>s==='吃')&&!flag.eat){flag.eat=1;cap('它在<b>吃虫</b>，要吃两回合，这两回合它不动、也不看。',1)}
+ else if(M.some(s=>s==='发现虫')&&!flag.bug){flag.bug=1;cap('它闻到、看到虫了，正朝那只虫去。<b>绿线</b>是被它吓到的虫下一步要逃去的地方。',1)}
+ else if(M.some(s=>s==='找你')&&!flag.find){flag.find=1;cap('它看不见你了，正去你最后被看见的那格（红框）找你。到了还没看见，它就不找了。',1)}
+ else if(capT>=0&&g.turn-capT>=3){capT=-99;cap(DAYCAP[run.day]||'')}
+ if(g.dead&&g.log.some(s=>/扑到|嘴里/.test(s))){cap('<b>你被吃了。</b>它是这样发现你的：'+(flag.lastWhy||'你站进了它的眼睛，或者挨着它')+'。<br>它一发现你，先停一回合，再一回合走两格扑过来。按“重开一局”再来。')}
  if(g.dead){run.over=true;g.log.push('这一局完了，按"重开一局"从第 1 天再来（虫会换地方）')}
  else if(g.won){const b=Math.min(MAX,run.belly+g.ate),a=b-NIGHT;
   if(a<0){run.over=true;run.night=`回窝了。睡前肚子 ${b}，一夜要扣 ${NIGHT}，饿死了。按"重开一局"再来。`}
