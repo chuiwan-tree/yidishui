@@ -165,7 +165,9 @@ const LV=[["#########", "#H......#", "#...b...#", "#.....b.#", "#@......#", "###
 const MAX=6,NIGHT=2,N=LV.length;
 const DAYCAP=['你是<b style="color:#8fd3ff">蓝色</b>这只小东西，住在<b style="color:#e8c070">窝</b>里。<b style="color:#b8e06a">黄绿点</b>是虫，走上去就吃掉。<br>今天吃够两只再回窝。以后每天吃几只你自己定：上面的肚子每晚要扣两格，扣到不够就饿死。第 30 回合会下雨，雨来前没进窝就死了。<br>用方向键（或下面的按钮）走一格。',
  '今天有一只<b style="color:#e2553f">蜥蜴</b>（红三角，尖的那头是它的脸）。它吃虫，也吃你。<br><span style="background:rgba(255,90,60,.35)">淡红的格</span>是它的眼睛：你站在里面，它下一回合就看见你。<br><b style="color:#2f9a44">绿的</b>是草，躲在草里它看不见你。',
- '这只蜥蜴住在右边那条走廊尽头，走廊里有虫。它饿了会去吃。<br>被它吓到的虫会逃，<b style="color:#b8e06a">绿线</b>是虫下一步要逃去的地方。','',''];
+ '这只蜥蜴住在右边那条走廊尽头，走廊里有虫。它饿了会去吃。<br>被它吓到的虫会逃，<b style="color:#b8e06a">绿线</b>是虫下一步要逃去的地方。',
+ '今天它离你很近，可能一会儿就会看见你。<br>被看见了别慌：拐过墙角或者钻进草，它会扑到你<b>最后被看见的那一格</b>（红框）去找，你已经不在那儿了。',
+ '今天有两只蜥蜴，一红一紫，各看各的。<br>这是最后一天，回窝过完今晚就赢了。'];
 let flag={};
 let capT=-99;function cap(h,ev){document.getElementById('cap').innerHTML=h;if(ev)capT=g?g.turn:0} const COL=['#e2553f','#d07de0'];
 let run={seed:0,day:0,belly:1,over:false,won:false,night:null}, g;
