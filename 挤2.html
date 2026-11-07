@@ -8,7 +8,7 @@ button.on{background:#2b4a6b}#t{max-width:560px;padding:0 12px;line-height:1.7;f
 <canvas id="c" width="128" height="128"></canvas>
 
 <div class="b"><button id="m0" class="on">点一下：喂</button><button id="m1">拖：画墙</button><button id="m2">拖：擦自己画的墙</button></div>
-<div class="b"><button id="go" style="background:#2b5a3b">放它走</button><button id="lv0">重来</button><button id="p">暂停</button></div>
+<div class="b"><button id="go" style="background:#2b5a3b">放它走</button><button id="lv0">第一关</button><button id="lv1">第二关：两个缝</button><button id="rr">重来</button><button id="p">暂停</button></div>
 <div class="b"><a href="index.html" style="color:#8ab">← 一滴水</a></div>
 <div id="t">挤 2（试玩版，甲第 13 天）：一只守恒的小水母，自己一直往下游，你没法掰它。<br>
 你手里只有两样：<b>3 把吃的</b>（点一下撒一把：撒在它碰得到的地方，它吃进去，身子就往那边长；离远了它够不着，吃的自己会散掉）和 <b>150 格墙</b>（拖着画，它躲墙）。<br>
@@ -54,10 +54,10 @@ cfg={flow:1,mu:.28,sg:.03,R:10,bs:[1,.5],dy:2,dx:0};kernel(cfg);
 let two=false,nofeed=0,body0=0,dead=false,steps=0,goal=true,won=false,fed=0;let GY0=108,GY1=124;
 function level(n){A=new Float64Array(N*N);FA=new Float64Array(N*N);const b=atob(JB);for(let y=0;y<64;y++)for(let x=0;x<64;x++)A[y*N+x+32]=b.charCodeAt(y*64+x)/100;
  W.fill(0);
- if(n===0){for(let y=76;y<79;y++)for(let x=0;x<N;x++)if(x<22||x>=32)W[y*N+x]=1}
+ if(n===0){for(let y=76;y<79;y++)for(let x=0;x<N;x++)if(x<22||x>=32)W[y*N+x]=1}if(n===1){for(let y=76;y<79;y++)for(let x=0;x<N;x++)if(!((x>=66&&x<74)||(x>=100&&x<118)))W[y*N+x]=1}cur=n;
  if(n===3){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(!((x>=40&&x<54)||(x>=74&&x<88)))W[y*N+x]=1;for(let y=61;y<124;y++)for(let x=62;x<66;x++)W[y*N+x]=1}
- if(n===1){for(let y=58;y<61;y++)for(let x=0;x<N;x++)if(x<40||x>=52)W[y*N+x]=1;for(let y=96;y<99;y++)for(let x=0;x<N;x++)if(x<76||x>=88)W[y*N+x]=1}
- goal=n!==2;GY0=n===0?100:108;GY1=n===0?116:124;two=n===3;if(goal)for(let y=GY1;y<GY1+3;y++)for(let x=0;x<N;x++)W[y*N+x]=1;rebuildWall();for(let i=0;i<N*N;i++)if(W[i])A[i]=0;LW.set(W);PW.fill(0);food=3;ink=150;started=false;paused=true;body0=bodyMass();dead=false;won=false;fed=0;lastB=0;rate=0;steps=0;steer(1,0)}
+ 
+ goal=true;GY0=100;GY1=116;two=n===3;if(goal)for(let y=GY1;y<GY1+3;y++)for(let x=0;x<N;x++)W[y*N+x]=1;rebuildWall();for(let i=0;i<N*N;i++)if(W[i])A[i]=0;LW.set(W);PW.fill(0);food=3;ink=150;started=false;paused=true;body0=bodyMass();dead=false;won=false;fed=0;lastB=0;rate=0;steps=0;steer(1,0)}
 function pieces(){const lab=new Int32Array(N*N);let id=0;const st=[],out=[];
  for(let s0=0;s0<N*N;s0++){if(A[s0]<=.2||lab[s0])continue;id++;let m=0,mi=0;st.push(s0);lab[s0]=id;
   while(st.length){const i=st.pop();m+=A[i];if(i>=GY0*N&&i<GY1*N)mi+=A[i];const y=(i/N)|0,x=i%N;
@@ -70,7 +70,7 @@ function bodyMass(){let s=0;for(let i=0;i<N*N;i++){const b=A[i]-FA[i];if(b>.2)s+
 function sprinkle(cy,cx,r){for(let y=-r;y<r;y++)for(let x=-r;x<r;x++){const j=idx(cy+y,cx+x);if(!W[j]&&Math.random()<.7){const r=Math.random();A[j]+=r;FA[j]+=r}}}
 function steer(dy,dx){cfg.dy=2*dy;cfg.dx=2*dx;kernel(cfg)}
 let mode=0;[0,1,2].forEach(k=>document.getElementById('m'+k).onclick=()=>{mode=k;[0,1,2].forEach(q=>document.getElementById('m'+q).classList.toggle('on',q===k))});
-document.getElementById('lv0').onclick=()=>level(0);document.getElementById('go').onclick=()=>{started=true;paused=false;document.getElementById('p').textContent='暂停'};
+let cur=0;document.getElementById('lv0').onclick=()=>level(0);document.getElementById('lv1').onclick=()=>level(1);document.getElementById('rr').onclick=()=>level(cur);document.getElementById('go').onclick=()=>{started=true;paused=false;document.getElementById('p').textContent='暂停'};
 let paused=true,fast=1,food=3,ink=150,started=false;const LW=new Uint8Array(N*N),PW=new Uint8Array(N*N);let lastB=0,rate=0;document.getElementById('p').onclick=e=>{if(!started)return;paused=!paused;e.target.textContent=paused?'接着动':'暂停'};
 function cell(e){const r=cv.getBoundingClientRect();return [Math.floor((e.clientY-r.top)/r.height*N),Math.floor((e.clientX-r.left)/r.width*N)]}
 let down=false;
