@@ -11,7 +11,7 @@ button.on{background:#2b4a6b}#t{max-width:560px;padding:0 12px;line-height:1.7;f
 <div class="b"><button id="go" style="background:#2b5a3b">放它走</button><button id="lv0">第一关</button><button id="lv1">第二关：两个缝</button><button id="rr">重来</button><button id="p">暂停</button></div>
 <div class="b"><a href="index.html" style="color:#8ab">← 一滴水</a></div>
 <div id="t">挤 2（试玩版，甲第 13 天）：一只守恒的小水母，自己一直往下游，你没法掰它。<br>
-你手里只有两样：<b>3 把吃的</b>（点一下撒一把：撒在它碰得到的地方，它吃进去，身子就往那边长；离远了它够不着，吃的自己会散掉）和 <b>150 格墙</b>（拖着画，它躲墙）。<br>
+你手里只有两样：<b>3 把吃的</b>（点一下撒一把：撒在它碰得到的地方，它吃进去，身子就往那边长；离远了它够不着，吃的自己会散掉）和 <b>150 格墙</b>（拖着画；它碰到墙会贴着墙摊开，不会自己绕；墙是斜的，它会往低的那头慢慢挪，很慢；画不到它身上）。<br>
 开局它停着，先布置好，再按"放它走"。走起来以后剩下的还能用。绿带里和绿带边上不能撒。<br>
 亮蓝的才是它的身子；黄的是你撒的、还没被它吃进去的吃的（被吃进去就变蓝，散开没人吃就淡掉）；灰的是它漏出来的雾。它游一路漏一路，挤缝的时候也在漏，亮的那块会越来越小。<br>把它送进底下的绿带：亮的身子大半进了绿带才算到。</div>
 <script>
@@ -74,7 +74,7 @@ let cur=0;document.getElementById('lv0').onclick=()=>level(0);document.getElemen
 let paused=true,fast=1,food=3,ink=150,started=false;const LW=new Uint8Array(N*N),PW=new Uint8Array(N*N);let lastB=0,rate=0;document.getElementById('p').onclick=e=>{if(!started)return;paused=!paused;e.target.textContent=paused?'接着动':'暂停'};
 function cell(e){const r=cv.getBoundingClientRect();return [Math.floor((e.clientY-r.top)/r.height*N),Math.floor((e.clientX-r.left)/r.width*N)]}
 let down=false;
-function paint(e){const [y,x]=cell(e);for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++){const j=idx(y+dy,x+dx);if(LW[j])continue;if(mode===1&&!PW[j]&&ink>0&&A[j]<.1){PW[j]=1;W[j]=1;ink--}if(mode===2&&PW[j]){PW[j]=0;W[j]=0;ink++}}}
+function paint(e){const [y,x]=cell(e);for(let dy=0;dy<=1;dy++)for(let dx=0;dx<=1;dx++){const j=idx(y+dy,x+dx);if(LW[j])continue;if(mode===1&&!PW[j]&&ink>0&&A[j]-FA[j]<.2){PW[j]=1;W[j]=1;ink--}if(mode===2&&PW[j]){PW[j]=0;W[j]=0;ink++}}}
 cv.addEventListener('pointerdown',e=>{if(mode===0){const [y,x]=cell(e);if(goal&&y>=GY0-5&&y<GY1+3){nofeed=20;return}if(food<=0)return;sprinkle(y,x,5);fed++;food--;return}down=true;paint(e)});
 cv.addEventListener('pointermove',e=>{if(down)paint(e)});
 addEventListener('pointerup',()=>{if(down){down=false;rebuildWall()}});
