@@ -173,7 +173,7 @@ function newRun(){flag={};run={seed:Math.floor(Math.random()*1e6),day:0,belly:1,
 function startDay(){g=parse(LV[run.day],{need:run.day===0?2:0,seed:run.seed*10+run.day,rs:(run.seed*10+run.day)*7919+1});run.night=null;cap(DAYCAP[run.day]||'');const S=size();c.width=g.W*S;c.height=g.H*S;draw()}
 const c=document.getElementById('c'),x=c.getContext('2d');
 function size(){return Math.min(44,Math.floor((Math.min(innerWidth,640)-40)/13))}
-function topbar(){document.getElementById('top').innerHTML=`第 ${run.day+1} / ${N} 天　肚子 `+'●'.repeat(Math.min(MAX,run.belly+g.ate))+'○'.repeat(MAX-Math.min(MAX,run.belly+g.ate))+`　（今晚要扣 ${NIGHT}）　<button onclick="newRun()">重开一局</button>`}
+function topbar(){const bl=run.night?run.belly:Math.min(MAX,run.belly+g.ate);document.getElementById('top').innerHTML=`第 ${run.day+1} / ${N} 天　肚子 `+'●'.repeat(bl)+'○'.repeat(MAX-bl)+`　（今晚要扣 ${NIGHT}）　<button onclick="newRun()">重开一局</button>`}
 function draw(){const S=size();
  const view=g.liz.map(L=>new Set(viewCells(g,L).map(q=>q[1]*g.W+q[0])));
  for(let y=0;y<g.H;y++)for(let X=0;X<g.W;X++){const ch=g.cell[y][X],k=y*g.W+X;
